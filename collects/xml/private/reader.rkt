@@ -1,6 +1,6 @@
-#lang racket
+#lang typed/racket
 (require "structures.rkt")
-
+#|
 (provide/contract
  [read-xml (() (input-port?) . ->* . document?)]
  [read-xml/document (() (input-port?) . ->* . document?)]
@@ -8,18 +8,28 @@
  [read-comments (parameter/c boolean?)]
  [collapse-whitespace (parameter/c boolean?)]
  [exn:xml? (any/c . -> . boolean?)])
+|#
 
 ;; Start-tag ::= (make-start-tag Location Location Symbol (listof Attribute))
-(define-struct (start-tag source) (name attrs))
+(define-struct: (start-tag source)
+  ([name : Symbol]
+   [attrs : (Listof Attribute)]))
+(define-type Start-tag start-tag)
 
 ;; End-tag ::= (make-end-tag Location Location Symbol)
-(define-struct (end-tag source) (name))
+(define-struct: (end-tag source)
+  ([name : Symbol]))
+(define-type End-tag end-tag)
 
 ;; Token ::= Contents | Start-tag | End-tag | Eof
+(define-type Token (U Start-tag End-tag EOF))
 
+(: read-comments (Parameter Boolean))
 (define read-comments (make-parameter #f))
+(: collapse-whitespace (Parameter Boolean))
 (define collapse-whitespace (make-parameter #f))
 
+#|
 ;; read-xml : [Input-port] -> Document
 (define read-xml
   (lambda ([in (current-input-port)])
@@ -167,7 +177,10 @@
         (make-pcdata (source-start x) (source-stop x) expanded)
         x)))
 
+|#
+
 ;; default-entity-table : Symbol -> (U #f String)
+(: default-entity-table (Symbol -> (Option String)))
 (define (default-entity-table name)
   (case name
     [(amp) "&"]
@@ -177,7 +190,9 @@
     [(apos) "'"]
     [else #f]))
 
-(define-struct (EOF source) ())
+(define-struct: (EOF source) ())
+
+#|
 
 ;; lex : Input-port (-> Location) -> (U Token special)
 (define (lex in pos)
@@ -402,6 +417,7 @@
       [(eof-object? c) (lex-error in pos "unexpected eof")]
       [else c])))
 
+
 ;; gen-read-until-string : String -> Input-port (-> Location) -> String
 ;; uses Knuth-Morris-Pratt from
 ;; Introduction to Algorithms, Cormen, Leiserson, and Rivest, pages 869-876
@@ -409,7 +425,11 @@
 ;; ---
 ;; Modified by Jay to look more like the version on Wikipedia after discovering a bug when parsing CDATA
 ;; The use of the hasheq table and the purely numeric code trades hash efficiency for stack/ec capture efficiency
-(struct hash-string (port pos ht))
+(define-struct: hash-string
+  ([port : ???]
+   [pos : ???]
+   [ht : ???]))
+(: hash-string-ref (??? ??? -> ???))
 (define (hash-string-ref hs k)
   (match-define (hash-string port pos ht) hs)
   (hash-ref! ht k (lambda () (non-eof read-char port pos))))
@@ -455,25 +475,29 @@
 (define lex-pi-data (gen-read-until-string "?>"))
 (define lex-cdata-contents (gen-read-until-string "]]>"))
 
+|#
+
 ;; positionify : Input-port -> Input-port (-> Location)
 ; This function predates port-count-lines! and port-next-location.
 ; Otherwise I would have used those directly at the call sites.
+(: positionify (Input-Port -> (Values Input-Port (-> Location))))
 (define (positionify in)
   (port-count-lines! in)
   (values
    in
    (lambda ()
      (let-values ([(line column offset) (port-next-location in)])
-       (make-location line column offset)))))
+       (and line column offset (make-location line column offset))))))
 
 ;; locs : (listof (list number number))
-(define-struct (exn:xml exn:fail:read) ())
+(define-struct: (exn:xml exn:fail:read) ())
 
 ;; lex-error : Input-port String (-> Location) TST* -> alpha
 ;; raises a lexer error, using exn:xml
+(: lex-error : (All (A) (Input-Port (-> Location) String Any * -> A))) ;;; comment is wrong
 (define (lex-error in pos str . rest)
   (let* ([the-pos (pos)]
-         [offset (location-offset the-pos)])
+         [offset (and (location? pos) (location-offset the-pos))])
     (raise
      (make-exn:xml
       (format "read-xml: lex-error: at position ~a: ~a"
@@ -485,6 +509,7 @@
 
 ;; parse-error : (listof srcloc) (listof TST) *-> alpha
 ;; raises a parsing error, using exn:xml
+(: parse-error (All (A) ((Listof srcloc) String Any * -> A)))
 (define (parse-error src fmt . args)
   (raise (make-exn:xml (string-append "read-xml: parse-error: "
                                       (apply format fmt args))
@@ -493,6 +518,7 @@
 
 ;; format-source : Location -> string
 ;; to format the source location for an error message
+(: format-source (Location -> String))
 (define (format-source loc)
   (if (location? loc)
       (format "~a.~a/~a" (location-line loc) (location-char loc) (location-offset loc))
