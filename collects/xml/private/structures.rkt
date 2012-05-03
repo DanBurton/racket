@@ -8,6 +8,22 @@
   #:transparent)
 (define-type Location (U location Symbol #f))
 
+(: loc-fun-opt (All (A) ((location -> A) -> (Location -> (Option A)))))
+(define (loc-fun-opt f)
+  (lambda (x)
+    (cond [(location? x) (f x)]
+          [else #f])))
+
+(: location-line-opt (Location -> (Option Natural)))
+(define location-line-opt (loc-fun-opt location-line))
+
+(: location-char-opt (Location -> (Option Natural)))
+(define location-char-opt (loc-fun-opt location-char))
+
+(: location-offset-opt (Location -> (Option Natural)))
+(define location-offset-opt (loc-fun-opt location-offset))
+
+
 ; Source = (make-source Location Location)
 (define-struct: source
   ([start : Location]
@@ -108,7 +124,7 @@
 
 ; Entity = (make-entity Location Location (U Nat Symbol))
 (define-struct: (entity source)
-  ([text : (U Symbol Valid-Char)]) ;;; Not just any Nat
+  ([text : (U Symbol Number)]) ;;; Not just any Nat
   #:transparent)
 (define-type Entity entity)
 
@@ -121,7 +137,7 @@
 (define-type Processing-Instruction p-i)
 
 ; Comment = (make-comment String)
-(define-struct: comment
+(define-struct: (comment source)
   ([text : String])
   #:transparent)
 (define-type Comment comment)
@@ -129,6 +145,9 @@
 
 (provide
  (struct-out location) Location
+ location-line-opt
+ location-char-opt
+ location-offset-opt
  (struct-out source) Source
  (struct-out external-dtd) External-Dtd
  (struct-out external-dtd/public)
