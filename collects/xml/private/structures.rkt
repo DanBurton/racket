@@ -7,6 +7,7 @@
    [offset : Natural])
   #:transparent)
 (define-type Location (U location Symbol #f))
+(define-predicate location/c Location)
 
 (: loc-fun-opt (All (A) ((location -> A) -> (Location -> (Option A)))))
 (define (loc-fun-opt f)
@@ -104,10 +105,12 @@
 ;         |  Misc
 ;         |  Cdata
 (define-type Content (U Pcdata Element Entity Misc Cdata))
+(define-predicate content/c Content)
 
 ; Misc = Comment
 ;      |  Processing-instruction
 (define-type Misc (U Comment Processing-Instruction))
+(define-predicate misc/c Misc)
 
 ; Section 2.2 of XML 1.1
 ; (XML 1.0 is slightly different and looks less restrictive)
@@ -144,7 +147,7 @@
 
 
 (provide
- (struct-out location) Location
+ (struct-out location) Location location/c
  location-line-opt
  location-char-opt
  location-offset-opt
@@ -155,12 +158,12 @@
  (struct-out document-type) Document-Type
  (struct-out comment) Comment
  (struct-out p-i) Processing-Instruction
- Misc
+ Misc misc/c
  (struct-out prolog) Prolog
  (struct-out document) Document
  (struct-out element) Element
  (struct-out attribute) Attribute
- Content
+ Content content/c
  (struct-out pcdata) Pcdata
  (struct-out cdata) Cdata
  valid-char? Valid-Char
