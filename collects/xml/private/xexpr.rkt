@@ -1,7 +1,7 @@
-#lang racket/base
+#lang typed/racket/base
 (require racket/pretty
          racket/list
-         racket/contract
+         ;racket/contract
          "structures.rkt"
          "reader.rkt"
          "writer.rkt")
@@ -16,25 +16,44 @@
 ;;        |  Cdata
 ;; Attribute-srep ::= (list Symbol String)
 
+(define-type Xexpr (U (Pairof Symbol Any)
+                      String
+                      Symbol
+                      Natural
+                      Comment
+                      Processing-Instruction
+                      Cdata))
+(define-type Attribute-srep (List Symbol String))
+
 ;; sorting is no longer necessary, since xt3d uses xml->zxexpr, which sorts.
 
 ;; assoc-sort : (listof (list Symbol a)) -> (listof (list Symbol a))
+(: assoc-sort (All (A) ((Listof (Pairof Symbol A)) -> (Listof (Pairof Symbol A)))))
 (define (assoc-sort to-sort)
-  (sort to-sort (bcompose string<? (compose symbol->string car))))
+  (sort to-sort (bcompose string<? (compose symbol->string
+                                            (ann car ((Pairof Symbol A) -> Symbol))))))
 
+
+(: xexpr-drop-empty-attributes (Parameter Boolean))
 (define xexpr-drop-empty-attributes (make-parameter #f))
 
+
+(define-type Xexpr-Datum
+  (U String Symbol Valid-Char
+     Comment Processing-Instruction Cdata Pcdata))
+(define-predicate xexpr-datum/c Xexpr-Datum)
+#|
 (define xexpr-datum/c
   (or/c string? symbol? valid-char?
         comment? p-i? cdata? pcdata?))
-
+|#
 #;(define xexpr/c
     (flat-rec-contract xexpr
                        xexpr-datum/c
                        (cons/c symbol?
                                (or/c (cons/c (listof (list/c symbol? string?)) (listof xexpr))
                                      (listof xexpr)))))
-
+#|
 (define (xexpr? x)
   (correct-xexpr? x (lambda () #t) (lambda (exn) #f)))
 
@@ -62,7 +81,10 @@
 ;; ;; ;; ;; ;; ;; ;
 ;; ; xexpr? helpers
 
-(define-struct (exn:invalid-xexpr exn:fail) (code))
+|#
+(define-struct: (exn:invalid-xexpr exn:fail)
+  ([code : Any]))
+#|
 
 ;; correct-xexpr? : any (-> a) (exn -> a) -> a
 (define (correct-xexpr? x true false)
@@ -102,17 +124,20 @@
             (current-continuation-marks)
             x)))))
 
+|#
 ;; has-attribute? : List -> Boolean
 ;; True if the Xexpr provided has an attribute list.
+(: has-attribute? ((Listof Any) -> Boolean))
 (define (has-attribute? x)
   (and (> (length x) 1)
-       (list? (cadr x))
-       (andmap (lambda (attr)
-                 (pair? attr))
-               (cadr x))))
+       (let ([second-x (cadr x)])
+         (if (list? second-x)
+             (andmap pair? second-x)
+             #f))))
 
 ;; attribute-pairs? : List (-> a) (exn -> a) -> a
 ;; True if the list is a list of pairs.
+(: attribute-pairs? ((Listof Any) (-> #t) (exn:invalid-xexpr -> #f) -> Boolean))
 (define (attribute-pairs? attrs true false)
   (if (null? attrs)
       (true)
@@ -129,17 +154,20 @@
 
 ;; attribute-symbol-string? : List (-> a) (exn -> a) -> a
 ;; True if the list is a list of String,Symbol pairs.
+(: attribute-symbol-string? ((Pairof Any Any) (-> #t) (exn:invalid-xexpr -> #f) -> Boolean))
 (define (attribute-symbol-string? attr true false)
+  (define cdr-attr (cdr attr))
   (if (symbol? (car attr))
-      (if (pair? (cdr attr))
-          (if (or (string? (cadr attr))
-                  ;(permissive-xexprs) ;;; TODO
-                  #f)
-              (true)
-              (false (make-exn:invalid-xexpr
-                      (format "Expected an attribute value string, given ~v" (cadr attr))
-                      (current-continuation-marks)
-                      (cadr attr))))
+      (if (pair? cdr-attr)
+          (let ([cadr-attr (car cdr-attr)])
+            (if (or (string? cadr-attr)
+                    ;(permissive-xexprs) ;;; TODO
+                    #f)
+                (true)
+                (false (make-exn:invalid-xexpr
+                        (format "Expected an attribute value string, given ~v" cadr-attr)
+                        (current-continuation-marks)
+                        cadr-attr))))
           (false (make-exn:invalid-xexpr
                   (format "Expected an attribute value string for attribute ~s, given nothing" attr)
                   (current-continuation-marks)
@@ -147,7 +175,7 @@
       (false (make-exn:invalid-xexpr
               (format "Expected an attribute symbol, given ~s" (car attr))
               (current-continuation-marks)
-              (cadr attr)))))
+              (cdr attr))))) ;;; was (cadr attr) - bug?
 
 ;; ; end xexpr? helpers
 ;; ;; ;; ;; ;; ;; ;; ;;
@@ -156,20 +184,24 @@
 ; : (a -> bool) tst -> bool
 ; To check if l is a (listof p?)
 ; Don't use (and (list? l) (andmap p? l)) because l may be improper.
+(: listof? ((Any -> Boolean) Any -> Boolean))
 (define (listof? p? l)
   (let listof-p? ([l l])
     (or (null? l)
         (and (cons? l) (p? (car l)) (listof-p? (cdr l))))))
 
 ; : tst -> bool
+(: xexpr-attribute? (Any -> Boolean))
 (define (xexpr-attribute? b)
   (and (pair? b)
        (symbol? (car b))
        (pair? (cdr b))
        (string? (cadr b))
        (null? (cddr b))))
+#|
 
 ;; xml->xexpr : Content -> Xexpr
+(: xml->xexpr (Content -> Xexpr))
 (define (xml->xexpr x)
   (let* ([non-dropping-combine
           (lambda (atts body)
@@ -194,29 +226,45 @@
         ;[(permissive-xexprs) x] ;;; TODO
         [else (error 'xml->xexpr "Expected content, given ~e" x)]))))
 
+|#
 ;; attribute->srep : Attribute -> Attribute-srep
+(: attribute->srep (Attribute -> Attribute-srep))
 (define (attribute->srep a)
   (list (attribute-name a) (attribute-value a)))
 
 ;; srep->attribute : Attribute-srep -> Attribute
+(: srep->attribute (Any -> Attribute))
 (define (srep->attribute a)
-  (unless (and (pair? a) (pair? (cdr a)) (null? (cddr a)) (symbol? (car a)) (string? (cadr a)))
-    (error 'srep->attribute "expected (list Symbol String) given ~e" a))
-  (make-attribute 'scheme 'scheme (car a) (cadr a)))
+  (define err (λ () (error 'srep->attribute "expected (list Symbol String) given ~e" a)))
+  (cond
+    [(pair? a)
+     (define car-a (car a))
+     (define cdr-a (cdr a))
+     (cond
+       [(pair? cdr-a)
+        (define cadr-a (car cdr-a))
+        (define cddr-a (cdr cdr-a))
+        (cond
+          [(and (null? cddr-a) (symbol? car-a) (string? cadr-a))
+           (make-attribute 'scheme 'scheme car-a cadr-a)]
+          [else (err)])]
+       [else (err)])]
+    [else (err)]))
 
 ;; xexpr->xml : Xexpr -> Content
 ;; The contract is enforced.
+(: xexpr->xml (Xexpr -> Content))
 (define (xexpr->xml x)
   (cond
     [(pair? x)
-     (let ([f (lambda (atts body)
-                (unless (list? body)
-                  (error 'xexpr->xml
-                         "expected a list of xexprs for the body in ~e"
-                         x))
-                (make-element 'scheme 'scheme (car x)
-                              atts
-                              (map xexpr->xml body)))])
+     (let ([f (lambda: ([atts : (Listof Attribute)] [body : Any])
+                (if (list? body)
+                    (make-element 'scheme 'scheme (car x)
+                                  atts
+                                  (map xexpr->xml body))
+                    (error 'xexpr->xml
+                           "expected a list of xexprs for the body in ~e"
+                           x)))])
        (if (and (pair? (cdr x))
                 (or (null? (cadr x))
                     (and (pair? (cadr x)) (pair? (caadr x)))))
@@ -228,6 +276,7 @@
     [(or (comment? x) (p-i? x) (cdata? x) (pcdata? x)) x]
     [else ;(error 'xexpr->xml "malformed xexpr ~e" x)
      x]))
+#|
 
 ;; xexpr->string : Xexpression -> String
 (define (xexpr->string xexpr)
@@ -238,10 +287,18 @@
 (define (string->xexpr str)
   (xml->xexpr (document-element (read-xml (open-input-string str)))))
 
+|#
 ;; bcompose : (a a -> c) (b -> a) -> (b b -> c)
+(: bcompose (All (A B C) ((A A -> C) (B -> A) -> (B B -> C))))
 (define (bcompose f g)
   (lambda (x y) (f (g x) (g y))))
 
+(provide
+ exn:invalid-xexpr
+ exn:invalid-xexpr-code
+ xexpr-drop-empty-attributes)
+
+#|
 (provide/contract
  [exn:invalid-xexpr? (any/c . -> . boolean?)]
  [exn:invalid-xexpr-code (exn:invalid-xexpr? . -> . any/c)]
@@ -306,3 +363,4 @@
      (write-xml-comment x 0 void out)]
     [(p-i? x)
      (write-xml-p-i x 0 void out)]))
+|#
