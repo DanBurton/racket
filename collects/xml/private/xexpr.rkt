@@ -21,11 +21,12 @@
        (U (List* Symbol (Listof Attribute-srep) (Listof X))
           (cons Symbol (Listof X))
           Symbol
-          Natural
+          Natural  ;; TODO: Valid-Char instead?
           Comment
           Processing-Instruction
           Cdata)))
 (define-type Attribute-srep (List Symbol String))
+(define-predicate listof-attr-srep? (Listof Attribute-srep))
 
 ;; sorting is no longer necessary, since xt3d uses xml->zxexpr, which sorts.
 
@@ -283,19 +284,10 @@
                             Xexpr)
          (car cdr-x))
        (define: cddr-x : (Listof Xexpr)
-         (if (null? cdr-x)
-             null
-             (cdr cdr-x)))
-       (cond
-         [(null? cadr-x)
-          (f null cddr-x)] ; cadr-x is an empty (Listof Attribute-srep)
-         [(not (pair? cadr-x))
-          (f null (cons cadr-x cddr-x))] ; cdr-x is a (Listof Xexpr)
-         [else ; cadr-x is a pair
-          (error "TODO: distinguish xexpr from Attribute-srep")
-          ;(f null cdr-x); cadr-x is an xexpr
-          ;(f (map srep->attribute cadr-x) cddr-x) ; cadr-x is a list of Attribute-srep
-          ]))]
+         (if (null? cdr-x) null (cdr cdr-x)))
+       (if (listof-attr-srep? cadr-x)
+           (f (map srep->attribute cadr-x) cddr-x) ; cadr-x is a list of Attribute-srep
+           (f null (cons cadr-x cddr-x))))]        ; cadr-x is an xexpr
     [(string? x) (make-pcdata 'scheme 'scheme x)]
     [(or (symbol? x) (exact-nonnegative-integer? x))
      (make-entity 'scheme 'scheme x)]
