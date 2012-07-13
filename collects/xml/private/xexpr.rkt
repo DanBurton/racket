@@ -16,13 +16,15 @@
 ;;        |  Cdata
 ;; Attribute-srep ::= (list Symbol String)
 
-(define-type Xexpr (U (Pairof Symbol Any)
-                      String
-                      Symbol
-                      Natural
-                      Comment
-                      Processing-Instruction
-                      Cdata))
+(define-type Xexpr
+  (Rec X
+       (U (List* Symbol (Listof Attribute-srep) (Listof X))
+          (cons Symbol (Listof X))
+          Symbol
+          Natural
+          Comment
+          Processing-Instruction
+          Cdata)))
 (define-type Attribute-srep (List Symbol String))
 
 ;; sorting is no longer necessary, since xt3d uses xml->zxexpr, which sorts.
@@ -257,7 +259,7 @@
 (define (xexpr->xml x)
   (cond
     [(pair? x)
-     (let ([f (lambda: ([atts : (Listof Attribute)] [body : Any])
+     (let ([f (lambda: ([atts : (Listof Attribute)] [body : (Listof Xexpr)])
                 (if (list? body)
                     (make-element 'scheme 'scheme (car x)
                                   atts
@@ -265,11 +267,35 @@
                     (error 'xexpr->xml
                            "expected a list of xexprs for the body in ~e"
                            x)))])
-       (if (and (pair? (cdr x))
+
+       #;(if (and (pair? (cdr x))
                 (or (null? (cadr x))
                     (and (pair? (cadr x)) (pair? (caadr x)))))
            (f (map srep->attribute (cadr x)) (cddr x))
-           (f null (cdr x))))]
+           (f null (cdr x)))
+
+       ; if x is a pair, then according to the definition of Xexpr,
+       ; (cdr x) can only have one of the two following types:
+       (define: cdr-x : (U (Pairof (Listof Attribute-srep) (Listof Xexpr))
+                           (Listof Xexpr))
+         (cdr x))
+       (define: cadr-x : (U (Listof Attribute-srep)
+                            Xexpr)
+         (car cdr-x))
+       (define: cddr-x : (Listof Xexpr)
+         (if (null? cdr-x)
+             null
+             (cdr cdr-x)))
+       (cond
+         [(null? cadr-x)
+          (f null cddr-x)] ; cadr-x is an empty (Listof Attribute-srep)
+         [(not (pair? cadr-x))
+          (f null (cons cadr-x cddr-x))] ; cdr-x is a (Listof Xexpr)
+         [else ; cadr-x is a pair
+          (error "TODO: distinguish xexpr from Attribute-srep")
+          ;(f null cdr-x); cadr-x is an xexpr
+          ;(f (map srep->attribute cadr-x) cddr-x) ; cadr-x is a list of Attribute-srep
+          ]))]
     [(string? x) (make-pcdata 'scheme 'scheme x)]
     [(or (symbol? x) (exact-nonnegative-integer? x))
      (make-entity 'scheme 'scheme x)]
