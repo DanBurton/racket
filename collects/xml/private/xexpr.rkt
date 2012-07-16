@@ -87,9 +87,9 @@
 |#
 (define-struct: (exn:invalid-xexpr exn:fail)
   ([code : Any]))
-#|
 
 ;; correct-xexpr? : any (-> a) (exn -> a) -> a
+(: correct-xexpr? (Any (-> #t) (exn:invalid-xexpr -> #f) -> Boolean))
 (define (correct-xexpr? x true false)
   (cond
     ((string? x) (true))
@@ -127,7 +127,7 @@
             (current-continuation-marks)
             x)))))
 
-|#
+#|
 ;; has-attribute? : List -> Boolean
 ;; True if the Xexpr provided has an attribute list.
 (: has-attribute? ((Listof Any) -> Boolean))
@@ -137,6 +137,12 @@
          (if (list? second-x)
              (andmap pair? second-x)
              #f))))
+|#
+(: has-attribute?
+   ((Listof Any) -> Boolean :
+                 (Pairof Any (Pairof (Listof (Pairof Any Any)) Any))))
+(define-predicate has-attribute?
+  (Pairof Any (Pairof (Listof (Pairof Any Any)) Any)))
 
 ;; attribute-pairs? : List (-> a) (exn -> a) -> a
 ;; True if the list is a list of pairs.
