@@ -31,10 +31,10 @@
 ;; sorting is no longer necessary, since xt3d uses xml->zxexpr, which sorts.
 
 ;; assoc-sort : (listof (list Symbol a)) -> (listof (list Symbol a))
-(: assoc-sort (All (A) ((Listof (Pairof Symbol A)) -> (Listof (Pairof Symbol A)))))
+(: assoc-sort (All (A) ((Listof (List Symbol A)) -> (Listof (List Symbol A)))))
 (define (assoc-sort to-sort)
   (sort to-sort (bcompose string<? (compose symbol->string
-                                            (ann car ((Pairof Symbol A) -> Symbol))))))
+                                            (ann car ((List Symbol A) -> Symbol))))))
 
 
 (: xexpr-drop-empty-attributes (Parameter Boolean))
