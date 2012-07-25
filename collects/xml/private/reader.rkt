@@ -249,7 +249,7 @@
                                      (string->number (read-until #\; in pos) 16)]
                               [else (string->number (read-until #\; in pos))])])
                      (cond
-                       [(not (number? n)) 
+                       [(not (exact-nonnegative-integer? n)) 
                         (lex-error in pos "malformed numeric entity")]
                        [(not (valid-char? n))
                         (lex-error in pos "not a well-formed numeric entity (does not match the production for Char, see XML 4.1)")]

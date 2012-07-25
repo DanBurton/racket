@@ -127,7 +127,7 @@
 
 ; Entity = (make-entity Location Location (U Nat Symbol))
 (define-struct: (entity source)
-  ([text : (U Symbol Number)]) ;;; Not just any Nat
+  ([text : (U Symbol Natural)]) ;;; Not just any Nat
   #:transparent)
 (define-type Entity entity)
 

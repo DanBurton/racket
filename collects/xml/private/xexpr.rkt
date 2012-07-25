@@ -21,6 +21,7 @@
        (U (List* Symbol (Listof Attribute-srep) (Listof X))
           (cons Symbol (Listof X))
           Symbol
+          String
           Natural  ;; TODO: Valid-Char instead?
           Comment
           Processing-Instruction
@@ -207,17 +208,36 @@
        (pair? (cdr b))
        (string? (cadr b))
        (null? (cddr b))))
-#|
+
+
+;; necessary helpers to juggle the types around correctly for xml->xexpr
+(define-predicate listof-xexpr-only? (Listof Xexpr))
+
+;; a type-constrained cons so TR doesn't get confused
+(define: (A B) (pair [a : A] [b : B]) : (Pairof A B) (cons a b))
+
+;; the identity function, specialized to distribute the U from
+;; (Pairof Foo (U Bar Baz)) to (U (Pairof Foo Bar) (Pairof Foo Baz))
+;; since TR can't figure that out on its own.
+(define: (A B C) (distribute-U [p : (Pairof A (U B C))]
+                               [q? : ((U B C) -> Boolean : B)])
+  : (U (Pairof A B) (Pairof A C))
+  (define car-p (car p))
+  (define cdr-p (cdr p))
+  (cond
+    ;; both branches are the same! It's just the type info that is different.
+    [(q? cdr-p) (cons car-p cdr-p)]
+    [else (cons car-p cdr-p)]))
 
 ;; xml->xexpr : Content -> Xexpr
 (: xml->xexpr (Content -> Xexpr))
 (define (xml->xexpr x)
   (let* ([non-dropping-combine
-          (lambda (atts body)
-            (cons (assoc-sort (map attribute->srep atts))
+          (lambda: ([atts : (Listof Attribute)] [body : (Listof Xexpr)])
+            (pair (assoc-sort (map attribute->srep atts))
                   body))]
          [combine (if (xexpr-drop-empty-attributes)
-                      (lambda (atts body)
+                      (lambda: ([atts : (Listof Attribute)] [body : (Listof Xexpr)])
                         (if (null? atts)
                             body
                             (non-dropping-combine atts body)))
@@ -225,9 +245,12 @@
     (let loop ([x x])
       (cond
         [(element? x)
-         (let ([body (map loop (element-content x))]
-               [atts (element-attributes x)])
-           (cons (element-name x) (combine atts body)))]
+         (let*: ([body : (Listof Xexpr) (map loop (element-content x))]
+                 [atts : (Listof Attribute) (element-attributes x)]
+                 [combine-atts-body : (U (List* (Listof Attribute-srep) (Listof Xexpr))
+                                         (Listof Xexpr))
+                                    (combine atts body)])
+           (distribute-U (pair (element-name x) combine-atts-body) listof-xexpr-only?))]
         [(pcdata? x) (pcdata-string x)]
         [(entity? x) (entity-text x)]
         [(or (comment? x) (p-i? x) (cdata? x)) x]
@@ -235,7 +258,6 @@
         ;[(permissive-xexprs) x] ;;; TODO
         [else (error 'xml->xexpr "Expected content, given ~e" x)]))))
 
-|#
 ;; attribute->srep : Attribute -> Attribute-srep
 (: attribute->srep (Attribute -> Attribute-srep))
 (define (attribute->srep a)
